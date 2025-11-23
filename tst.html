@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark"> <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Startrekker - Log & Live Long</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Aangepaste scrollbar voor esthetiek */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        
+        /* Stijlen voor kleurkiezer */
+        input[type="color"] { -webkit-appearance: none; border: none; padding: 0; overflow: hidden; }
+        input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+        input[type="color"]::-webkit-color-swatch { border: none; }
+        
+        /* Startrek-geïnspireerde typografie */
+        .startrek-font { letter-spacing: 1px; text-transform: uppercase; }
+        
+        /* Simpele fade in animatie voor knoppen/stats die verschijnen */
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        /* Progressbar animatie */
+        .progress-bar-fill { transition: width 0.5s ease-out; }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300 min-h-screen font-sans pb-10">
+
+    <nav class="bg-white dark:bg-gray-800 shadow-md p-4 sticky top-0 z-50 border-b-4 border-yellow-500">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-white flex items-center startrek-font">
+                <i class="fas fa-hand-spock mr-3 text-yellow-500 text-3xl transform -rotate-12"></i>
+                Startrekker
+            </h1>
+            <div class="flex gap-2 sm:gap-4 text-sm sm:text-base items-center">
+                <button onclick="showSection('input')" class="hover:text-yellow-600 font-medium transition">Invoeren</button>
+                <button onclick="showSection('stats')" class="hover:text-yellow-600 font-medium transition">Statistieken</button>
+                <!-- Nieuwe navigatiepunten voor de gesplitste instellingen -->
+                <button onclick="showSection('management')" class="hover:text-yellow-600 font-medium transition">Beheer</button>
+                <button onclick="showSection('settings')" class="hover:text-yellow-600 font-medium transition"><i class="fas fa-cog"></i></button>
+                <button onclick="toggleTheme()" class="ml-2 p-1 sm:p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition">
+                    <i id="theme-icon" class="fas fa-moon"></i>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 max-w-5xl">
+        
+        <!-- API STATUS SECTIE (Nu voornamelijk voor foutmeldingen) -->
+        <section id="section-api-status" class="hidden space-y-4 animate-fade-in">
+            <div class="bg-red-100 dark:bg-red-900/30 border-l-4 border-red-500 p-4 rounded-lg shadow">
+                <p id="api-status-message" class="text-red-800 dark:text-red-300 font-semibold flex items-center gap-2">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Fout bij het laden van data. Controleer de serverstatus.
+                </p>
+            </div>
+        </section>
+        
+        <section id="section-input" class="hidden space-y-6 animate-fade-in">
+            
+            <!-- Datumkiezer & Navigatie -->
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold">Datum voor invoer</h3>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Selecteer een andere dag om oude data in te vullen.</p>
+                    </div>
+                </div>
+                <div class="flex gap-2 w-full sm:w-auto items-center">
+                    <button id="prev-day-btn" onclick="changeInputDay(-1)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50 text-gray-700 dark:text-gray-300" title="Vorige dag">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    
+                    <input type="date" id="entry-date" onchange="loadDataAndRender()" class="border p-2 rounded dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500 font-medium w-full sm:w-auto">
+                    
+                    <button id="next-day-btn" onclick="changeInputDay(1)" class="p-2 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition disabled:opacity-50 text-gray-700 dark:text-gray-300" disabled title="Volgende dag">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    
+                    <button onclick="setToday()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded transition text-sm font-semibold whitespace-nowrap flex-shrink-0">Vandaag instellen</button>
+                </div>
+            </div>
+
+            <!-- Tracker Invoer Lijst -->
+            <div id="tracker-list" class="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-4"></div>
+
+            <!-- Activiteit Vandaag Lijst -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-t-4 border-indigo-500">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 border-b dark:border-gray-700 pb-2 gap-2">
+                    
+                    <h3 class="text-lg font-bold text-gray-700 dark:text-gray-200 flex items-center whitespace-nowrap">
+                        <i class="fas fa-list-ul mr-2 text-indigo-500"></i>
+                        <span id="today-list-title">Activiteit Vandaag</span>
+                    </h3>
+
+                    <select id="activity-filter" onchange="renderTodayActivity()" class="border p-2 rounded dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                        <option value="all">Alles</option>
+                    </select>
+                </div>
+                <div id="today-activity-list" class="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    <p class="text-gray-400 text-sm italic">Nog geen invoer voor deze datum.</p>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Statistieken Sectie -->
+        <section id="section-stats" class="hidden space-y-8">
+            <div class="flex flex-col md:flex-row justify-between items-center bg-white dark:bg-gray-800 p-4 rounded-lg shadow gap-4">
+                <h2 class="text-xl font-bold">Overzicht</h2>
+                <div class="flex flex-col sm:flex-row gap-4 w-full md:w-auto">
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Item:</label>
+                        <select id="stats-filter" onchange="renderStatsView()" class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="all">Alle Items</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-2 w-full sm:w-auto">
+                        <label class="text-sm font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">Periode:</label>
+                        <select id="time-filter" onchange="renderStatsView()" class="border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="week">Laatste week</option>
+                            <option value="month" selected>Per Maand</option>
+                            <option value="year">Per Jaar</option>
+                            <option value="all">Alles</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+                <div class="flex items-center gap-2 mb-2">
+                    <i class="fas fa-clock text-purple-500 text-lg"></i>
+                    <h3 class="font-bold text-gray-700 dark:text-gray-200">Activiteit per uur (24u)</h3>
+                </div>
+                <div class="h-48 w-full">
+                    <canvas id="activity-chart"></canvas>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div id="calendar-container" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow lg:col-span-2 flex flex-col">
+                    <p class="text-center text-gray-500">Kalender wordt geladen...</p>
+                </div>
+
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow flex flex-col h-[400px]">
+                    <h3 id="selected-date-title" class="text-lg font-bold mb-4 border-b pb-2 dark:border-gray-700">Details</h3>
+                    <div id="day-details-list" class="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                        <p class="text-gray-400 text-sm italic text-center mt-10">Klik op een dag.</p>
+                    </div>
+                </div>
+            </div>
+
+            <h3 class="text-xl font-bold pt-4">Details per Categorie</h3>
+            <div id="charts-container" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+        </section>
+
+        <!-- Sectie 1: Categorie Beheer -->
+        <section id="section-management" class="hidden space-y-6 animate-fade-in">
+            <h2 class="text-2xl font-bold mb-4">Tracker Beheer</h2>
+
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-red-500">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-lg font-bold mb-1"><i class="fas fa-shield-alt mr-2"></i>Bewerkmodus</h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400">Schakel dit in om trackers te verplaatsen of te verwijderen of doelen aan te passen.</p>
+                    </div>
+                    <button id="edit-mode-toggle-btn" onclick="toggleEditMode()" class="px-4 py-2 rounded font-bold text-sm transition shadow-md">
+                        UIT
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-blue-500">
+                <h2 class="text-lg font-semibold mb-4">Nieuwe categorie aanmaken</h2>
+                
+                <div class="flex flex-col gap-3">
+                    <div class="flex flex-col sm:flex-row gap-2 items-stretch">
+                        <input type="text" id="new-tracker-name" placeholder="Naam (bv. Hoofdpijn)" class="border p-2 rounded flex-grow dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                        <select type="select" id="new-tracker-type" onchange="toggleGoalInput()" class="border p-2 rounded dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="number">Getal (Staafdiagram)</option>
+                            <option value="text">Tekst (Cirkeldiagram)</option>
+                            <option value="select">Keuzelijst (Cirkeldiagram)</option>
+                        </select>
+                        <div class="relative w-full sm:w-12 h-10 sm:h-auto border rounded overflow-hidden cursor-pointer dark:border-gray-600" title="Kies kleur">
+                            <input type="color" id="new-tracker-color" value="#3b82f6" class="w-[150%] h-[150%] -top-1/4 -left-1/4 absolute cursor-pointer">
+                        </div>
+                    </div>
+                    
+                    <!-- Nieuwe Doel Invoer -->
+                    <div id="goal-input-container" class="flex gap-2 items-center">
+                         <input type="number" id="new-tracker-goal" placeholder="Dagelijks doel (optioneel)" class="border p-2 rounded flex-grow dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-green-500" min="0">
+                         <button onclick="addTracker()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition font-semibold shadow flex-shrink-0">
+                            <i class="fas fa-plus"></i> Voeg toe
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-sm font-medium text-gray-500 dark:text-gray-400 mt-4 mb-2 block">Kies een icoon:</label>
+                    <div id="icon-picker-container" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <!-- Back-up sectie -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-green-500">
+                    <h3 class="text-lg font-bold mb-2"><i class="fas fa-download mr-2"></i>Lokale Back-up maken</h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-4 text-sm">Download al je gegevens naar een lokaal bestand.</p>
+                    <button onclick="exportData()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded transition w-full md:w-auto">Download .JSON bestand</button>
+                </div>
+                <!-- AANPASSING: Import functie verwijderd -->
+            </div>
+        </section>
+
+        <!-- Sectie 2: API Configuratie (Aangepast voor Single Service) -->
+        <section id="section-settings" class="hidden space-y-6 animate-fade-in">
+            <h2 class="text-2xl font-bold mb-4">Applicatie Instellingen</h2>
+            
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-purple-500">
+                <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fas fa-database text-purple-500"></i>Backend Configuratie</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    De API draait nu op dezelfde host als de frontend. De onderstaande instellingen worden nu niet meer gebruikt, 
+                    maar zijn bewaard voor als je later overstapt op een aparte API-server.
+                </p>
+                
+                <div class="flex flex-col sm:flex-row gap-4 items-end opacity-50 pointer-events-none">
+                    <div class="flex-grow w-full">
+                        <label for="api-host" class="block text-sm font-medium text-gray-700 dark:text-gray-300">API Host (Wordt genegeerd):</label>
+                        <!-- De waarden worden genegeerd en vastgezet op de huidige host/port -->
+                        <input type="text" id="api-host" placeholder="Gebruikt de huidige host" value="DEZE_WAARDE_WORDT_GENEGEERD" disabled class="mt-1 border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <div class="w-24">
+                        <label for="api-port" class="block text-sm font-medium text-gray-700 dark:text-gray-300">Poort (Wordt genegeerd):</label>
+                        <input type="number" id="api-port" placeholder="3000" value="DEZE_WAARDE_WORDT_GENEGEERD" disabled class="mt-1 border p-2 rounded w-full dark:bg-gray-700 dark:border-gray-600 outline-none focus:ring-2 focus:ring-purple-500">
+                    </div>
+                    <button onclick="alert('Instellingen zijn vastgezet. Refresh om de pagina te herladen.')" class="bg-gray-500 text-white px-4 py-2 rounded transition font-semibold w-full sm:w-auto shadow-md flex-shrink-0">
+                        Opslaan (Genegeerd)
+                    </button>
+                </div>
+
+                <p id="current-api-url" class="mt-4 text-xs text-gray-500 dark:text-gray-400">Huidige API URL: **Relatief pad /api (via Express)**</p>
+            </div>
+            
+            <!-- Thema instellingen -->
+            <div class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow border-l-4 border-indigo-500">
+                <h3 class="text-lg font-bold mb-1"><i class="fas fa-palette mr-2"></i>Thema</h3>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Schakel tussen lichte en donkere modus.</p>
+                <button onclick="toggleTheme()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded transition font-semibold w-full sm:w-auto shadow-md flex items-center gap-2">
+                    <i id="theme-icon-settings" class="fas fa-moon"></i> Huidig Thema Wijzigen
+                </button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- GLOBALE STATE & CONFIGURATIE ---
+        // De API_BASE_URL is nu ingesteld op een relatief pad, omdat de Node.js server de frontend serveert
+        let API_BASE_URL = '/api'; 
+        
+        let trackers = []; 
+        let logs = [];     
+        let isEditMode = JSON.parse(localStorage.getItem('omni_edit_mode')) || false; 
+        
+        let currentDate = new Date(); 
+        let selectedDateStr = null;
+        let chartInstances = {};
+        let activityChartInstance = null;
+        let globalValueColorMap = {};
+        let selectedIcon = 'fa-smile';
+        let numberChartType = JSON.parse(localStorage.getItem('numberChartType')) || 'bar';
+
+        const availableIcons = [
+            { class: 'fa-pills', title: 'Medicijn' },
+            { class: 'fa-utensils', title: 'Eten' },
+            { class: 'fa-brain', title: 'Hersenen' },
+            { class: 'fa-poop', title: 'Drol' },
+            { class: 'fa-smile', title: 'Blij' },
+            { class: 'fa-bed', title: 'Slapen' },
+            { class: 'fa-tint', title: 'Water' },
+            { class: 'fa-running', title: 'Sport' },
+            { class: 'fa-coins', title: 'Geld' },
+            { class: 'fa-book', title: 'Boek' },
+            { class: 'fa-coffee', title: 'Koffie' },
+            { class: 'fa-dumbbell', title: 'Gewichten' },
+            { class: 'fa-sun', title: 'Zon' }
+        ];
+
+        // --- API SERVICE FUNCTIES ---
+
+        function checkApiConfig() {
+            // Configuratie is nu altijd 'klaar', omdat we relatief pad /api gebruiken
+            return true;
+        }
+
+        async function apiFetch(endpoint, options = {}) {
+            const url = `${API_BASE_URL}${endpoint}`;
+            const defaultOptions = {
+                headers: { 'Content-Type': 'application/json' },
+            };
+            const fetchOptions = { ...defaultOptions, ...options };
+            if (options.body) {
+                fetchOptions.body = JSON.stringify(options.body);
+            }
+
+            try {
+                const response = await fetch(url, fetchOptions);
+                
+                if (response.ok) {
+                    if (options.method === 'DELETE') return { success: true }; 
+                    return response.json();
+                } else {
+                    const errorData = await response.json().catch(() => ({ message: 'Onbekende fout' })); 
+                    throw new Error(`API Fout (${response.status}): ${errorData.message || response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Netwerk of API Fout:', error);
+                document.getElementById('api-status-message').innerHTML = `<i class="fas fa-times-circle"></i> Fout bij verbinding met de server op ${url}. (${error.message}). Zorg ervoor dat de Docker container draait.`;
+                showSection('api-status');
+                return null;
+            }
+        }
+
+        // --- DATA INTERACTIE FUNCTIES ---
+
+        async function loadAllData() {
+            document.getElementById('section-api-status').classList.add('hidden');
+            
+            const loadedTrackers = await apiFetch('/trackers');
+            const loadedLogs = await apiFetch('/logs');
+            
+            if (loadedTrackers === null || loadedLogs === null) {
+                trackers = [];
+                logs = [];
+                return false;
+            }
+
+            trackers = loadedTrackers.map(t => ({
+                ...t,
+                legacyId: parseInt(t.legacyId),
+                goal: parseInt(t.goal || 0)
+            }));
+            logs = loadedLogs;
+            
+            if (document.getElementById('section-api-status').classList.contains('hidden')) {
+                 const currentVisibleSection = ['input','stats','management','settings'].find(id => !document.getElementById(`section-${id}`).classList.contains('hidden'));
+                 if(!currentVisibleSection) showSection('input');
+            }
+            return true;
+        }
+
+        async function addTracker() {
+            const name = document.getElementById('new-tracker-name').value;
+            const type = document.getElementById('new-tracker-type').value;
+            const color = document.getElementById('new-tracker-color').value;
+            const goal = type === 'number' ? (parseInt(document.getElementById('new-tracker-goal').value) || 0) : 0;
+            
+            if (!name.trim()) return alert('Geef een naam op!');
+            if (type === 'number' && goal < 0) { return alert('Het doel moet 0 of positief zijn.'); }
+
+            const newTrackerData = { 
+                legacyId: Date.now(), 
+                name: name, 
+                type: type, 
+                color: color,
+                icon: selectedIcon,
+                goal: goal
+            };
+
+            const newTracker = await apiFetch('/trackers', { method: 'POST', body: newTrackerData });
+
+            if (newTracker) {
+                newTracker.legacyId = parseInt(newTracker.legacyId);
+                newTracker.goal = parseInt(newTracker.goal || 0);
+
+                trackers.push(newTracker);
+                renderTrackers();
+                document.getElementById('new-tracker-name').value = '';
+                document.getElementById('new-tracker-goal').value = '';
+                alert(`Tracker '${newTracker.name}' succesvol aangemaakt!`);
+            }
+        }
+
+        async function updateTracker(id, data) {
+            const updatedTracker = await apiFetch(`/trackers/${id}`, { method: 'PUT', body: data });
+
+            if (updatedTracker) {
+                const index = trackers.findIndex(t => t.legacyId == id);
+                if (index !== -1) {
+                    updatedTracker.legacyId = parseInt(updatedTracker.legacyId);
+                    updatedTracker.goal = parseInt(updatedTracker.goal || 0);
+                    trackers[index] = updatedTracker;
+                }
+                renderTrackers();
+                return updatedTracker;
+            }
+            return null;
+        }
+
+        async function deleteTracker(id) { 
+            if(!confirm('Weet je zeker dat je deze tracker en alle logs wilt verwijderen?')) return; 
+            
+            const result = await apiFetch(`/trackers/${id}`, { method: 'DELETE' });
+            
+            if (result && result.success) { 
+                trackers = trackers.filter(t => t.legacyId !== id); 
+                logs = logs.filter(l => l.trackerId !== id); 
+                renderTrackers(); 
+                alert('Tracker succesvol verwijderd!');
+            } 
+        }
+
+        async function logData(trackerId, defaultValue = null) {
+            const input = document.getElementById(`input-${trackerId}`);
+            const tracker = trackers.find(t => t.legacyId == trackerId);
+            let value = defaultValue !== null ? defaultValue : input.value; 
+            
+            if (!value || String(value).trim() === '') return;
+
+            value = String(value).trim();
+            
+            if (tracker.type === 'number') {
+                value = value.replace(',', '.'); 
+                const numValue = parseFloat(value);
+                if (isNaN(numValue)) { alert('Voer een geldig getal in.'); return; }
+                value = numValue;
+            }
+
+
+            const datePickerValue = document.getElementById('entry-date').value;
+            let timestampDate = new Date();
+            if(datePickerValue) { 
+                const s = new Date(datePickerValue);
+                const now = new Date();
+                timestampDate = new Date(s.getFullYear(), s.getMonth(), s.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+            }
+
+            const newLogData = { 
+                trackerId: trackerId, 
+                trackerName: tracker.name, 
+                value: value, 
+                timestamp: timestampDate.toISOString() 
+            };
+            
+            const newLog = await apiFetch('/logs', { method: 'POST', body: newLogData });
+
+            if (newLog) {
+                logs.unshift(newLog); 
+                
+                if (tracker.type === 'number') {
+                    input.value = ''; 
+                    toggleInputButton(trackerId);
+                } else {
+                    input.value = '';
+                }
+                
+                const origBg = input.style.backgroundColor; input.style.backgroundColor = '#86efac'; setTimeout(() => { input.style.backgroundColor = origBg; }, 500);
+                renderTrackers(); 
+            }
+        }
+        
+        async function deleteLogEntry(ts) {
+            if(!confirm("Invoer verwijderen?")) return;
+            
+            const result = await apiFetch(`/logs/${encodeURIComponent(ts)}`, { method: 'DELETE' });
+
+            if(result && result.success) {
+                logs = logs.filter(l => l.timestamp !== ts);
+                renderTrackers(); 
+            }
+        }
+        
+        async function deleteLog(ts, fId) { 
+            if(confirm('Verwijderen?')) { 
+                const result = await apiFetch(`/logs/${encodeURIComponent(ts)}`, { method: 'DELETE' });
+                if (result && result.success) {
+                    logs = logs.filter(l => l.timestamp !== ts); 
+                    if(selectedDateStr) showDayDetails(selectedDateStr, fId); 
+                    renderStatsView(); 
+                    renderTrackers(); 
+                }
+            } 
+        }
+
+        // --- CONFIGURATIE FUNCTIES (Aangepast/Vereenvoudigd) ---
+
+        function saveApiConfig() {
+            alert('De API-configuratie is nu vastgezet op het relatieve pad /api. Dit werkt omdat Express de frontend serveert. De pagina wordt herladen.');
+            window.location.reload(); 
+        }
+
+        function loadApiConfig() {
+            // De instellingenvelden zijn nu puur informatief/uitgeschakeld
+            document.getElementById('api-host').value = window.location.hostname;
+            document.getElementById('api-port').value = window.location.port || '80';
+            document.getElementById('current-api-url').innerText = `Huidige API URL: ${window.location.protocol}//${window.location.host}/api (Relatief pad)`;
+        }
+
+        // --- MAIN INITIALISATIE LOGICA ---
+
+        async function loadDataAndRender() {
+            await loadAllData();
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (localStorage.getItem('theme') === 'light') {
+                document.documentElement.classList.remove('dark');
+            } else {
+                document.documentElement.classList.add('dark'); 
+                if (!localStorage.getItem('theme')) {
+                    localStorage.setItem('theme', 'dark');
+                }
+            }
+            updateThemeIcon();
+            
+            document.getElementById('entry-date').valueAsDate = new Date();
+            renderIconPicker();
+            toggleGoalInput(); 
+            renderEditModeBtn();
+
+  
+</html>
